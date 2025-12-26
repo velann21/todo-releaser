@@ -1,0 +1,15 @@
+{
+  "release_version": "v202552.0.0",
+  "services": [
+    {
+      "name": "todo-frontend",
+      "image": "velann21/todo-frontend",
+      "version": "latest"
+    },
+    {
+      "name": "todo-backend",
+      "image": "velann21/todo-backend",
+      "version": "latest"
+    }
+  ]
+}
