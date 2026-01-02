@@ -172,6 +172,13 @@ func main() {
 				},
 				&ec2.SecurityGroupIngressArgs{
 					Protocol:    pulumi.String("tcp"),
+					FromPort:    pulumi.Int(3000),
+					ToPort:      pulumi.Int(3000),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					Description: pulumi.String("Frontend"),
+				},
+				&ec2.SecurityGroupIngressArgs{
+					Protocol:    pulumi.String("tcp"),
 					FromPort:    pulumi.Int(22),
 					ToPort:      pulumi.Int(22),
 					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")}, // Restrict this in production!
@@ -225,9 +232,24 @@ func main() {
 		if dbUsername == "" {
 			dbUsername = "postgres"
 		}
-		imageTag := conf.Get("imageTag")
-		if imageTag == "" {
-			imageTag = "latest"
+		if dbUsername == "" {
+			dbUsername = "postgres"
+		}
+		frontendImage := conf.Get("frontendImage")
+		if frontendImage == "" {
+			frontendImage = "singaravelan21/todo-frontend"
+		}
+		frontendVersion := conf.Get("frontendVersion")
+		if frontendVersion == "" {
+			frontendVersion = "latest"
+		}
+		backendImage := conf.Get("backendImage")
+		if backendImage == "" {
+			backendImage = "singaravelan21/todo-backend"
+		}
+		backendVersion := conf.Get("backendVersion")
+		if backendVersion == "" {
+			backendVersion = "latest"
 		}
 		dockerUsername := conf.Require("dockerUsername")
 		dockerPassword := conf.RequireSecret("dockerPassword")
@@ -313,7 +335,7 @@ func main() {
 
 		// 6. Run Ansible Playbook
 		_, err = local.NewCommand(ctx, "run-ansible", &local.CommandArgs{
-			Create: pulumi.Sprintf("sleep 60; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -u ec2-user --private-key %s -i '%s,' -e 'database_url=postgres://%s:%s@%s/%s' -e 'secret_key=%s' -e 'image_name=singaravelan21/todo-backend' -e 'image_tag=%s' -e 'docker_username=%s' -e 'docker_password=%s' ansible/playbook.yml",
+			Create: pulumi.Sprintf("sleep 60; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -u ec2-user --private-key %s -i '%s,' -e 'database_url=postgres://%s:%s@%s/%s' -e 'secret_key=%s' -e 'frontend_image=%s' -e 'frontend_version=%s' -e 'backend_image=%s' -e 'backend_version=%s' -e 'docker_username=%s' -e 'docker_password=%s' ansible/playbook.yml",
 				privateKeyPath,
 				server.PublicIp,
 				cluster.MasterUsername,
@@ -321,7 +343,10 @@ func main() {
 				cluster.Endpoint,
 				cluster.DatabaseName,
 				djangoSecret.Result,
-				imageTag,
+				pulumi.String(frontendImage),
+				pulumi.String(frontendVersion),
+				pulumi.String(backendImage),
+				pulumi.String(backendVersion),
 				dockerUsername,
 				dockerPassword,
 			),

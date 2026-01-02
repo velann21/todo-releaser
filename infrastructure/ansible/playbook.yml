@@ -25,6 +25,13 @@
         groups: docker
         append: yes
 
+    - name: Add team public keys
+      authorized_key:
+        user: ec2-user
+        state: present
+        key: "{{ item }}"
+      loop: "{{ team_keys | default([]) }}"
+
     - name: Download Docker Compose
       get_url:
         url: "https://github.com/docker/compose/releases/latest/download/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}"
@@ -56,10 +63,10 @@
         password: "{{ docker_password }}"
         reauthorize: yes
 
-    - name: Run Todo App Container
+    - name: Run Todo Backend Container
       community.docker.docker_container:
-        name: "{{ container_name | default('todo-app') }}"
-        image: "{{ image_name }}:{{ image_tag | default('latest') }}"
+        name: "todo-backend"
+        image: "{{ backend_image }}:{{ backend_version }}"
         state: started
         restart_policy: always
         ports:
@@ -69,3 +76,12 @@
           SECRET_KEY: "{{ secret_key }}"
           DJANGO_ALLOWED_HOSTS: "{{ django_allowed_hosts | default('*') }}"
           DEBUG: "{{ debug | default('0') }}"
+
+    - name: Run Todo Frontend Container
+      community.docker.docker_container:
+        name: "todo-frontend"
+        image: "{{ frontend_image }}:{{ frontend_version }}"
+        state: started
+        restart_policy: always
+        ports:
+          - "3000:80"

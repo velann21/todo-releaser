@@ -3,13 +3,13 @@
   "services": [
     {
       "name": "todo-frontend",
-      "image": "velann21/todo-frontend",
-      "version": "latest"
+      "image": "singaravelan21/todo-frontend",
+      "version": "v1.1.0"
     },
     {
       "name": "todo-backend",
-      "image": "velann21/todo-backend",
-      "version": "latest"
+      "image": "singaravelan21/todo-backend",
+      "version": "v1.1.0"
     }
   ]
 }
