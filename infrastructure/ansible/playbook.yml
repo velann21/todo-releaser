@@ -1,0 +1,71 @@
+---
+- name: Configure EC2 Instance
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update all packages
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Download Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/latest/download/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Verify Docker Compose installation
+      command: docker-compose --version
+      register: docker_compose_version
+      changed_when: false
+
+    - name: Print Docker Compose version
+      debug:
+        msg: "Docker Compose version: {{ docker_compose_version.stdout }}"
+
+    - name: Install python3-pip
+      yum:
+        name: python3-pip
+        state: present
+
+    - name: Install docker python library
+      yum:
+        name: python3-docker
+        state: present
+
+    - name: Log into Docker Hub
+      community.docker.docker_login:
+        username: "{{ docker_username }}"
+        password: "{{ docker_password }}"
+        reauthorize: yes
+
+    - name: Run Todo App Container
+      community.docker.docker_container:
+        name: "{{ container_name | default('todo-app') }}"
+        image: "{{ image_name }}:{{ image_tag | default('latest') }}"
+        state: started
+        restart_policy: always
+        ports:
+          - "8000:8000"
+        env:
+          DATABASE_URL: "{{ database_url }}"
+          SECRET_KEY: "{{ secret_key }}"
+          DJANGO_ALLOWED_HOSTS: "{{ django_allowed_hosts | default('*') }}"
+          DEBUG: "{{ debug | default('0') }}"

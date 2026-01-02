@@ -1,0 +1,8 @@
+environment:
+  - default/todo-app-common
+config:
+  todo-infrastructure:imageTag: v1.0.0
+  todo-infrastructure:dockerUsername: singaravelan21
+  todo-infrastructure:dockerPassword:
+    secure: AAABAAzw2GPnpxIx9pl+IR479ruKe3oCN0Oe9UbatEQtU+JzPU6CxdwB
+  todo-infrastructure:docker: singaravelan21
