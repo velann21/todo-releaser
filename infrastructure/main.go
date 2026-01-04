@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/rds"
@@ -251,8 +253,30 @@ func main() {
 		if backendVersion == "" {
 			backendVersion = "latest"
 		}
+
+		// Team SSH Keys
+		var teamKeys []string
+		teamKeysStr := conf.Get("teamKeys")
+		if teamKeysStr != "" {
+			teamKeys = strings.Split(teamKeysStr, ",")
+		}
+		teamKeysJSON, err := json.Marshal(teamKeys)
+		if err != nil {
+			return err
+		}
+
 		dockerUsername := conf.Require("dockerUsername")
 		dockerPassword := conf.RequireSecret("dockerPassword")
+		githubToken := conf.RequireSecret("githubToken")
+
+		releaserImage := conf.Get("releaserImage")
+		if releaserImage == "" {
+			releaserImage = "singaravelan21/todo-releaser"
+		}
+		releaserVersion := conf.Get("releaserVersion")
+		if releaserVersion == "" {
+			releaserVersion = "latest"
+		}
 
 		fmt.Println("Docker Username: ", dockerUsername)
 		fmt.Println("Docker Password: ", dockerPassword)
@@ -335,7 +359,7 @@ func main() {
 
 		// 6. Run Ansible Playbook
 		_, err = local.NewCommand(ctx, "run-ansible", &local.CommandArgs{
-			Create: pulumi.Sprintf("sleep 60; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -u ec2-user --private-key %s -i '%s,' -e 'database_url=postgres://%s:%s@%s/%s' -e 'secret_key=%s' -e 'frontend_image=%s' -e 'frontend_version=%s' -e 'backend_image=%s' -e 'backend_version=%s' -e 'docker_username=%s' -e 'docker_password=%s' ansible/playbook.yml",
+			Create: pulumi.Sprintf("sleep 60; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -u ec2-user --private-key %s -i '%s,' -e 'database_url=postgres://%s:%s@%s/%s' -e 'secret_key=%s' -e 'frontend_image=%s' -e 'frontend_version=%s' -e 'backend_image=%s' -e 'backend_version=%s' -e 'docker_username=%s' -e 'docker_password=%s' -e 'github_token=%s' -e 'releaser_image=%s' -e 'releaser_version=%s' -e '{\"team_keys\": %s}' ansible/playbook.yml",
 				privateKeyPath,
 				server.PublicIp,
 				cluster.MasterUsername,
@@ -349,11 +373,16 @@ func main() {
 				pulumi.String(backendVersion),
 				dockerUsername,
 				dockerPassword,
+				githubToken,
+				pulumi.String(releaserImage),
+				pulumi.String(releaserVersion),
+				pulumi.String(teamKeysJSON),
 			),
 			Triggers: pulumi.Array{
 				server.PublicIp,
 				djangoSecret.Result,
 				dockerPassword,
+				githubToken,
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{server}))
 		if err != nil {

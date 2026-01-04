@@ -85,3 +85,34 @@
         restart_policy: always
         ports:
           - "3000:80"
+
+    - name: Install git
+      yum:
+        name: git
+        state: present
+
+    - name: Clone Todo Releaser Repository
+      git:
+        repo: "https://{{ github_token }}@github.com/velann21/todo-releaser.git"
+        dest: /home/ec2-user/todo-releaser
+        version: master
+        force: yes
+
+    - name: Configure Git User
+      command: git config user.email "releaser@bot.com"
+      args:
+        chdir: /home/ec2-user/todo-releaser
+
+    - name: Configure Git Name
+      command: git config user.name "Releaser Bot"
+      args:
+        chdir: /home/ec2-user/todo-releaser
+
+    - name: Run Releaser Container
+      community.docker.docker_container:
+        name: "todo-releaser"
+        image: "{{ releaser_image }}:{{ releaser_version }}"
+        state: started
+        restart_policy: always
+        volumes:
+          - "/home/ec2-user/todo-releaser:/app"
