@@ -11,10 +11,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
 )
 
 const (
-	ManifestFile = "release_manifest.json"
+	ManifestFile    = "release_manifest.json"
+	PollingInterval = 30 * time.Second
 )
 
 type Service struct {
@@ -43,13 +46,23 @@ const (
 )
 
 func main() {
-	fmt.Println("Starting Releaser...")
+	fmt.Println("Starting Releaser in Reconciler Mode...")
 
+	for {
+		err := reconcile()
+		if err != nil {
+			fmt.Printf("Error during reconciliation: %v\n", err)
+		}
+		fmt.Printf("Sleeping for %v...\n", PollingInterval)
+		time.Sleep(PollingInterval)
+	}
+}
+
+func reconcile() error {
 	// 1. Load Manifest
 	manifest, err := loadManifest(ManifestFile)
 	if err != nil {
-		fmt.Printf("Error loading manifest: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error loading manifest: %w", err)
 	}
 
 	updated := false
@@ -80,34 +93,32 @@ func main() {
 
 	if !updated {
 		fmt.Println("No updates found.")
-		return
+		return nil
 	}
 
 	// 2. Update Manifest File
 	err = saveManifest(ManifestFile, manifest)
 	if err != nil {
-		fmt.Printf("Error saving manifest: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error saving manifest: %w", err)
 	}
 
 	// 3. Git Operations
 	// Commit
 	err = runGitCommand("add", ManifestFile)
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 
 	msg := "chore: update services to latest versions"
 	err = runGitCommand("commit", "-m", msg)
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 
 	// Tag
 	newVersion, err := generateNewVersion(maxIncrement)
 	if err != nil {
-		fmt.Printf("Error generating new version: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error generating new version: %w", err)
 	}
 	fmt.Printf("Creating new tag: %s\n", newVersion)
 
@@ -115,28 +126,28 @@ func main() {
 	manifest.ReleaseVersion = newVersion
 	err = saveManifest(ManifestFile, manifest)
 	if err != nil {
-		fmt.Printf("Error saving manifest with new version: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error saving manifest with new version: %w", err)
 	}
 
 	// Commit again with the version update
 	err = runGitCommand("add", ManifestFile)
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 
 	msg = fmt.Sprintf("chore: release %s", newVersion)
 	err = runGitCommand("commit", "-m", msg)
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 
 	err = runGitCommand("tag", newVersion)
 	if err != nil {
-		os.Exit(1)
+		return err
 	}
 
 	fmt.Println("Release created locally. Run 'git push --tags origin master' to publish.")
+	return nil
 }
 
 func loadManifest(path string) (*Manifest, error) {
@@ -163,7 +174,8 @@ func getLatestTagFromDockerHub(image string) (string, error) {
 		parts = []string{"library", parts[0]}
 	}
 
-	url := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/%s/tags?page_size=5", parts[0], parts[1])
+	// Fetch more tags to ensure we find a semantic one
+	url := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/%s/tags?page_size=20", parts[0], parts[1])
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
@@ -183,17 +195,25 @@ func getLatestTagFromDockerHub(image string) (string, error) {
 		return "", nil
 	}
 
+	var semverTags []*semver.Version
 	for _, tag := range tags.Results {
-		if tag.Name != "latest" {
-			return tag.Name, nil
+		// Attempt to parse as semantic version
+		// We handle 'v' prefix if present, though semver lib handles it too usually
+		v, err := semver.NewVersion(tag.Name)
+		if err == nil {
+			semverTags = append(semverTags, v)
 		}
 	}
 
-	if len(tags.Results) > 0 {
-		return tags.Results[0].Name, nil
+	if len(semverTags) == 0 {
+		return "", nil
 	}
 
-	return "", nil
+	// Sort to find the latest
+	sort.Sort(semver.Collection(semverTags))
+
+	// Return the latest version
+	return semverTags[len(semverTags)-1].Original(), nil
 }
 
 func runGitCommand(args ...string) error {

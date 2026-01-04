@@ -1,0 +1,68 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'release_manifest.json'
+      - 'infrastructure/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infrastructure
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Extract Versions from Manifest
+        id: versions
+        working-directory: .
+        run: |
+          FRONTEND_VERSION=$(jq -r '.services[] | select(.name=="todo-frontend") | .version' release_manifest.json)
+          BACKEND_VERSION=$(jq -r '.services[] | select(.name=="todo-backend") | .version' release_manifest.json)
+          FRONTEND_IMAGE=$(jq -r '.services[] | select(.name=="todo-frontend") | .image' release_manifest.json)
+          BACKEND_IMAGE=$(jq -r '.services[] | select(.name=="todo-backend") | .image' release_manifest.json)
+          
+          echo "FRONTEND_VERSION=$FRONTEND_VERSION" >> $GITHUB_ENV
+          echo "BACKEND_VERSION=$BACKEND_VERSION" >> $GITHUB_ENV
+          echo "FRONTEND_IMAGE=$FRONTEND_IMAGE" >> $GITHUB_ENV
+          echo "BACKEND_IMAGE=$BACKEND_IMAGE" >> $GITHUB_ENV
+          
+          echo "Deploying Frontend: $FRONTEND_IMAGE:$FRONTEND_VERSION"
+          echo "Deploying Backend: $BACKEND_IMAGE:$BACKEND_VERSION"
+
+      - name: Pulumi Up
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: dev
+          work-dir: ./infrastructure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: eu-west-1
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          # Pass versions as config
+          PULUMI_CONFIG_frontendVersion: ${{ env.FRONTEND_VERSION }}
+          PULUMI_CONFIG_backendVersion: ${{ env.BACKEND_VERSION }}
+          PULUMI_CONFIG_frontendImage: ${{ env.FRONTEND_IMAGE }}
+          PULUMI_CONFIG_backendImage: ${{ env.BACKEND_IMAGE }}
+          PULUMI_CONFIG_dockerUsername: ${{ secrets.DOCKER_USERNAME }}
+          PULUMI_CONFIG_dockerPassword: ${{ secrets.DOCKER_PASSWORD }}
+          PULUMI_CONFIG_teamKeys: ${{ secrets.TEAM_KEYS }}
