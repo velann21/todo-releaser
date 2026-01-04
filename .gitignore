@@ -1,0 +1,7 @@
+infrastructure/infrastructure
+infrastructure-controlplane/infrastructure-controlplane
+*.exe
+*.test
+*.out
+.infrastructure/pulumi.*.yaml
+.infrastructure-controlplane/pulumi.*.yaml

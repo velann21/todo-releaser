@@ -65,3 +65,4 @@ jobs:
           PULUMI_CONFIG_backendImage: ${{ env.BACKEND_IMAGE }}
           PULUMI_CONFIG_dockerUsername: ${{ secrets.DOCKER_USERNAME }}
           PULUMI_CONFIG_dockerPassword: ${{ secrets.DOCKER_PASSWORD }}
+          PULUMI_CONFIG_teamKeys: ${{ secrets.TEAM_KEYS }}
